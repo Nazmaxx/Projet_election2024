@@ -1,0 +1,770 @@
+---
+title: Résultats de la liste Bardella aux élections européennes de Mai 2024 dans la région Pays de la Loire
+author: "NAZIR HUSSAIN Nazma"
+date: "9 Décembre 2024"
+output:
+  slidy_presentation: default
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)    # tableaux
+library(ggplot2)  # graphiques
+library(sf)       # cartographie (chargement)
+library(tmap)     # cartographie (visualisation)
+library(dbplyr)   # Pour l'organisation des données 
+library(kableExtra)
+library(xtable)
+library(gridExtra)
+library(cowplot)
+library(grid)
+library(gt)
+library(broom)
+
+# Chargement des données 
+base<-readRDS("elect2024/elec2024_circ.RDS")
+base$urb3 <- cut(base$loc_urb, breaks=c(-1,50,90,101))
+levels(base$urb3) <- c("rural (<50%) ","mixte (50-90%)","urbain (>90%)")
+
+# Choix de Y quanti à expliquer
+base$Y <- base$Bardella
+nomY <- "% de vote Bardella"
+
+# Choix de Q : qualitative
+base$Q <-base$urb3
+nomQ <- "Typologie urbain-rural"
+
+# Choix de X : quantitative
+base$X <-base$act_cad
+nomX <- "% actifs cadre"
+
+# Choix de la variable de poids
+base$W <- base$INS
+nomW <- "Nombre d'électeurs inscrits"
+
+# Choix de la région
+myreg<- "PAYS DE LA LOIRE"
+nomreg<-"Pays de la Loire"
+
+# Tableau simplifié France entière
+fra<-base[,c("ID","nom_reg","nom_dpt","INS","EXP","Y","Q","X")]
+
+# Tableau simplifié région
+reg<- base[base$nom_reg == myreg,c("ID","nom_reg","nom_dpt","INS","EXP","Y","Q","X")]
+
+# Carte France
+mapfra<-st_read("elect2024/map_circ.shp")
+mapfra<-merge(mapfra[,1], fra, by="ID" )
+
+# Carte région
+mapreg<-mapfra[mapfra$nom_reg==myreg,]
+
+
+
+```
+
+
+
+<div style="text-align: center; padding-top: 20px; font-size: 36px;background-color: #000080; color: white; padding: 20px;"> <strong>INTRODUCTION</strong> </div>
+
+
+
+| ![](img/election1.jpeg){width=300}  | ![](img/election.jpeg){width=300}   | ![](img/RN.png){width=300}  
+|----------------------------|----------------------------|----------------------------|
+
+
+<div style="font-size:20px; color:steelblue; line-height:1.6;">
+- **Contexte :** En Mai 2024, les élections européennes ont eu lieu. L'analyse est centrée sur la région **Pays de la Loire**. 
+
+- **Objectif :** Je dois présenter les performances de la liste menée par **Jordan BARDELLA**. 
+
+- **Hypothèse 1 :** On peut supposer qu'il existe une corrélation entre la typologie "rural"/"urbain" et le résultat des élection. 
+
+- **Hypothèse 2 :** De plus, on va démontrer qu'il existe une relation entre CSP des cadres et le résultat obtenu par la liste BARDELLA. Autrement dit, les régions où il y a le plus de cadres, il y a un faible pourcentage de vote pour Bardella. 
+
+- **Hypothèse 3 :** Enfin, on va démontrer qu'il existe une relation entre le pourcentage d'actifs ayant un diplôme supérieur au bac et les votes reçus par Bardella. Autrement dit, les régions où le pourcentage de diplômés ayant obtenu le bac est plus élevé, il y a un faible pourcentage de vote pour Bardella. 
+
+
+Ainsi, nous verrons dans une première partie le résultat global de la liste de Jordan BARDELLA et l'effet urbain-rural sur les résultats de ces élections en Pays de la Loire. 
+
+Ensuite, nous nous pencherons sur l'effet des CSP cadres sur le résultats de ces élections.
+
+Enfin, nous verrons la relation entre le pourcentage de diplôme après le bac des actifs et les votes pour Bardella. 
+</div>
+
+
+---
+
+<div style="text-align: center; padding-top: 20px; font-size: 36px;background-color: #000080; color: white; padding: 20px;"> <strong>A. EXPLORATION </strong> </div>
+
+**1) Répartition du Pourcentage de Votes par Région en France pour Jordan Bardella**
+
+ 
+```{r}
+# prépare le tableau
+x<-tapply(fra$Y, fra$nom_reg, mean)
+tab1<-data.frame(rang= rank(-x),region = names(x), moyenne=x )
+tab1 <- tab1[order(tab1$rang),]
+
+```
+
+<style>
+.two-columns {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px; 
+}
+
+.column {
+  flex: 1; 
+}
+
+.graphic-column {
+  max-width: 60%; 
+}
+
+.table-column {
+  max-width: 40%; 
+}
+</style>
+
+<div class="two-columns">
+
+<div class="column graphic-column">
+
+```{r, echo=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+
+ggplot(tab1, aes(x = reorder(region, -moyenne), y = moyenne)) +
+  geom_bar(stat = "identity", fill = "steelblue", color = "black", width = 0.7) +
+  geom_text(aes(label = round(moyenne, 1)), hjust = -0.2, size = 3.5, color = "black") +
+  coord_flip() +
+  labs(
+    title = "Scores moyens par région",
+    subtitle = "Moyenne des votes pour Bardella par région en France",
+    x = "Région",
+    y = "% de vote moyen"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray40"),
+    axis.title.y = element_text(size = 11),
+    axis.text.y = element_text(size = 10, face = "bold"),
+    axis.title.x = element_text(size = 11),
+    axis.text.x = element_text(size = 9),
+    panel.grid = element_blank(), 
+    panel.background = element_rect(fill = "white", color = NA) 
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+```
+</div> <div class="column table-column">
+
+```{r}
+library(kableExtra)
+kable(tab1, row.names = FALSE, digits = 1, caption = "Scores par région") %>%
+  kable_styling(
+    full_width = FALSE, 
+    font_size = 10
+  )
+
+```
+</div> </div> 
+
+
+<div style="font-size:25px; color:steelblue;">
+
+- **Commentaire :** Jordan Bardella obtient le plus de vote dans la région du Nord Pas De Calais-Picardie avec une moyenne de 42.6% et il obtient la dernière place en Ile-De-France lors des élections européennes en Mai 2024. 
+
+</div>
+
+---
+
+**2) Variations internes de ma région**
+
+
+```{r}
+# Convertir le résumé en data frame
+var <- summary(reg$Y)
+var_df <- data.frame(Statistiques = names(var), Valeurs = as.vector(var), stringsAsFactors = FALSE)
+
+# Créer un tableau 'grob' à partir du data frame
+table_grob <- tableGrob(var_df, rows = NULL, theme = ttheme_minimal(base_size = 10))
+
+# Créer le graphique
+p <- ggplot(reg, aes(x = Y)) +
+  geom_histogram(bins = 6, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution des Votes pour Bardella",
+    x = "% de Vote Bardella",
+    y = "Fréquence"
+  ) +
+  theme_minimal(base_size = 8) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 8),
+    panel.grid = element_blank()
+  )
+
+# Convertir le graphique en 'grob'
+plot_grob <- ggplotGrob(p)
+
+# Afficher le tableau et le graphique côte à côte
+grid.arrange(
+  table_grob, plot_grob,
+  ncol = 2,
+  widths = c(1, 2)
+)
+
+```
+
+<div style="font-size:25px; color:steelblue;">
+- **Commentaire :** Dans la région Pays de la Loire, une circonscription a enregistré un pourcentage de vote de 11,11 % au minimum, tandis qu'une autre a atteint un maximum de 40,93 % lors des élections européennes de mai 2024. La médiane des votes est de 28.87, tandis que la moyenne s'élève à 27.86%
+
+</div>
+
+---
+
+**3) Cartographie des résultats**
+
+
+```{r}
+# Avec Tmap 
+tm_shape(mapreg) +
+tm_polygons("Y",                      
+    palette = "Blues",          
+    style = "quantile",        
+    border.col = "black",      
+    border.alpha = 0.5          
+  ) +
+  tm_layout(
+    title = "Carte illustrant la variation interne de vote en Pays de la Loire",
+    legend.outside = TRUE,      
+    frame = FALSE,
+    asp = 0.8,              
+    inner.margins = c(0.05, 0.05, 0.05, 0.05),  
+    title.size = 1.2 
+  )
+
+```
+
+<div style="font-size:25px; color:steelblue;">
+- **Commentaire :** Cette carte présente les résultats de Jordan Bardella dans la région Pays de la Loire. Une couleur bleue plus foncée indique un pourcentage de votes plus élevé en sa faveur.
+</div>
+
+
+---
+
+<div style="text-align: center; padding-top: 20px; font-size: 36px;background-color: #000080; color: white; padding: 20px;"> <strong>B. L'EFFET URBAIN-RURAL </strong> </div>
+
+
+**1) Résultats par type d'espace**
+
+
+```{r}
+moy<-tapply(reg$Y,reg$Q,mean)
+min<-tapply(reg$Y,reg$Q,min)
+max<-tapply(reg$Y,reg$Q,max)
+
+# ... autres paramètres ...
+tab2 <- data.frame(
+  "Typologie" = rownames(moy),
+  "Moyenne" = round(moy, 1),
+  "Minimum" = round(min, 1),
+  "Maximum" = round(max, 1)
+)
+
+# Convertir le tableau en un objet grid avec tableGrob
+table_grob <- tableGrob(
+  tab2,
+  rows = NULL,
+  theme = ttheme_default(
+    core = list(
+      fg_params = list(cex = 0.8),  
+      bg_params = list(fill = c("white", "lightblue")[1 + (seq_len(nrow(tab2)) %% 2)])
+    ),
+    colhead = list(fg_params = list(fontface = "bold", cex = 0.9))  
+  )
+)
+
+# Ajuster les colonnes pour éviter la coupure
+table_grob$widths[1] <- unit(2, "cm")  # Largeur de la colonne "Typologie"
+table_grob$widths[2:4] <- unit(1.5, "cm")
+
+```
+
+
+
+```{r}
+boxplot_plot <- ggplot(reg) + 
+  aes(x = Q, y = Y) + 
+  geom_boxplot(fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution des Votes par Typologie Urbaine-Rurale",
+    x = "Typologie Urbaine-Rurale",
+    y = "Pourcentage de Votes"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    panel.grid = element_blank(),
+    plot.margin = margin(1, 1, 1, 1, "cm")  
+  ) +
+  coord_cartesian(xlim = c(0.5, 3.5))
+
+# Convertir le graphique en un objet grid
+grid_plot <- ggplotGrob(boxplot_plot)
+
+# Afficher le tableau à droite et le graphique à gauche
+grid.arrange(
+  grid_plot,
+  table_grob,
+  ncol = 2,
+  widths = c(2, 1) 
+)
+```
+
+<div style="font-size:25px; color:steelblue;">
+- **Commentaire :** D'après l'analyse de mon tableau et de mon boxplot, j'observe que Jordan Bardella obtient ses meilleurs résultats dans l'espace rural, avec une moyenne de 31,4 %. Dans l'espace mixte, la moyenne de ses votes atteint 27,6 %. En revanche, ses scores sont nettement plus faibles dans l'espace urbain, où il enregistre une moyenne de seulement 14,6 %.
+</div>
+
+
+---
+
+
+**2) Modélisation**
+
+Analyse de variance
+
+```{r}
+# Modèle de régression
+mod1 <- lm(reg$Y ~ reg$Q)
+
+# Extraire les coefficients
+coeffs <- summary(mod1)$coefficients
+coeffs_df <- as.data.frame(coeffs)
+colnames(coeffs_df) <- c("Estimate", "Std. Error", "t-value", "p-value")
+coeffs_df$Variable <- rownames(coeffs_df)
+coeffs_df <- coeffs_df[, c("Variable", "Estimate", "Std. Error", "t-value", "p-value")]
+
+# Extraire l'ANOVA
+anova_results <- anova(mod1)
+anova_df <- as.data.frame(anova_results)
+anova_df$Source <- rownames(anova_df)
+anova_df <- anova_df[, c("Source", "Df", "Sum Sq", "Mean Sq", "F value", "Pr(>F)")]
+
+# Créer deux tableaux esthétiques
+library(gt)
+
+# Tableau des coefficients
+coeff_table <- coeffs_df %>%
+  gt() %>%
+  tab_header(title = "Résultats des Coefficients du Modèle") %>%
+  fmt_number(columns = 2:5, decimals = 3) %>%
+  cols_label(
+    Estimate = "Estimation",
+    `Std. Error` = "Erreur Standard",
+    `t-value` = "Valeur t",
+    `p-value` = "P-Value",
+    Variable = "Variable"
+  )
+
+# Tableau des résultats de l'ANOVA
+anova_table <- anova_df %>%
+  gt() %>%
+  tab_header(title = "Tableau ANOVA") %>%
+  fmt_number(columns = 2:6, decimals = 3) %>%
+  cols_label(
+    Source = "Source",
+    `Df` = "Degrés de Liberté",
+    `Sum Sq` = "Somme des Carrés",
+    `Mean Sq` = "Moyenne des Carrés",
+    `F value` = "Valeur F",
+    `Pr(>F)` = "P-Value"
+  )
+  
+# Affichage des deux tableaux
+coeff_table
+anova_table
+
+
+```
+<div style="font-size:25px; color:steelblue;">
+- **Conclusion :** L'analyse montre que le modèle est significatif globalement, car la p-value de l'ANOVA est de 0.000, ce qui signifie que les variables explicatives (ici, les différentes catégories de "reg$Q") ont un effet statistiquement significatif sur la variable dépendante Y (le pourcentage de vote reçu par Bardella). 
+
+La variable "urbain (>90%)" est également significative avec une p-value de 0.000, ce qui indique que cette catégorie a un effet fort et significatif sur Y. 
+
+La variable "reg$Qmixte (50-90%)" a une p-value de 0.055, ce qui est marginalement non significatif au seuil de 0.05, mais cela pourrait être interprété comme un effet potentiellement significatif dans certaines analyses. Dans les zones rurales, le pourcentage est de 31%. Dans les zones rurales, le pourcentage de votes est de 31%. Ce pourcentage diminue de 3,78% dans les zones mixtes et chute de 16,76% dans les zones urbaines.
+</div>
+
+<div style="font-size:30px; color:red;">
+L'hypothèse 1 est donc validée et vérifiée, il existe bien une corrélation entre la typologie "rural" et "urbain" avec le nombre de pourcentage de votes reçu par Bardella. 
+</div>
+
+---
+
+<div style="text-align: center; padding-top: 20px; font-size: 36px;background-color: #000080; color: white; padding: 20px;"> <strong> C. HYPOTHESE SOCIO-ECONOMIQUE </strong> </div>
+
+
+**1) Comparaison cartographique**
+
+
+```{r}
+# Solution Tmap 
+map1 <- tm_shape(mapreg) +
+  tm_polygons("Y",
+    palette = "Blues",       
+    style = "quantile",       
+    border.col = "black",     
+    border.alpha = 0.5        
+  ) +
+  tm_layout(
+    title = "Pourcentage de votes reçu pour Bardella",
+    legend.outside = TRUE,
+    frame = FALSE,
+    title.size = 1.5
+  )
+
+map2 <- tm_shape(mapreg) +
+  tm_polygons("X",
+    palette = "Blues",       
+    style = "quantile",       
+    border.col = "black",     
+    border.alpha = 0.5        
+  ) +
+  tm_layout(
+    title = "Pourcentage d'actifs cadres",
+    legend.outside = TRUE,
+    frame = FALSE,
+    title.size = 1.5
+  )
+
+tmap_arrange(map1, map2, ncol = 2)
+
+```
+
+<div style="font-size:25px; color:steelblue;">
+Ces cartes illustrent deux variables distinctes. D'une part, la carte Y montre le pourcentage de votes obtenus par Bardella dans les différentes circonscriptions de la région des Pays de la Loire. D'autre part, la carte X représente le pourcentage d'actifs occupant des postes de cadres dans cette même région.
+</div>
+
+---
+
+**2) Visualisation et test de la relation**
+
+
+```{r}
+# Graphique à améliorer
+plot(reg$X, reg$Y,
+     main = "Relation entre les Pourcentages d'Actifs Cadres et les Votes pour Bardella",
+  xlab = "Pourcentage d'Actifs Cadres",
+  ylab = "Pourcentage de Votes pour Bardella",
+  col = "steelblue",
+  pch = 16,
+  cex = 1.2 
+)
+
+# Ajout d'une tendance linéaire
+abline(lm(reg$Y ~ reg$X), col = "red", lwd = 2) 
+```
+<div style="font-size:25px; color:steelblue;">
+On observe que c'est une relation monotone, négative, forte et significative. 
+</div>
+
+```{r, warning=FALSE}
+pearson_result <- cor.test(reg$Y, reg$X, method = "pearson")
+spearman_result <- cor.test(reg$Y, reg$X, method = "spearman")
+
+pearson_df <- tidy(pearson_result)
+spearman_df <- tidy(spearman_result)
+
+kable(pearson_df, caption = "Résultats de la corrélation de Pearson") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) %>%
+  column_spec(1, bold = TRUE)
+
+kable(spearman_df, caption = "Résultats de la corrélation de Spearman") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) %>%
+  column_spec(1, bold = TRUE)
+```
+<div style="font-size:25px; color:steelblue;">
+D’après les résultats des tests de corrélation, on observe une forte corrélation négative significative entre les variables X et Y. Plus précisément, lorsque la variable X (pourcentage d'actifs cadres) augmente, le pourcentage de votes pour Bardella (Y) tend à diminuer. Cette relation est confirmée à la fois par le test de Pearson (r=−0.874) et le test de Spearman (ρ=−0.782), ce qui montre une cohérence entre les deux approches.
+
+La valeur p très faible dans les deux tests indique que cette corrélation n’est pas due au hasard, renforçant l’idée d’une relation statistiquement significative. En conclusion, cette analyse statistique met en évidence une relation importante entre les deux variables étudiées : les régions où les actifs cadres sont plus présents sont également celles où Bardella recueille un pourcentage de votes plus faible. Cela pourrait refléter des dynamiques sociologiques ou économiques spécifiques à explorer davantage. 
+</div>
+
+---
+
+**3) Modélisation de la relation**
+
+```{r, results = "hide", echo = FALSE}
+mod2<-lm(reg$Y~reg$X)
+summary(mod2)
+```
+
+
+```{r}
+# Extraction des résultats de la régression
+coefficients <- summary(mod2)$coefficients
+r_squared <- summary(mod2)$r.squared
+adj_r_squared <- summary(mod2)$adj.r.squared
+f_statistic <- summary(mod2)$fstatistic[1]
+p_value <- pf(f_statistic, summary(mod2)$fstatistic[2], summary(mod2)$fstatistic[3], lower.tail = FALSE)
+
+# Mise en forme des résultats dans un tableau
+
+results_table <- data.frame(
+  "Variable" = rownames(coefficients),
+  "Estimation" = round(coefficients[, 1], 3),
+  "Erreur Standard" = round(coefficients[, 2], 3),
+  "Valeur t" = round(coefficients[, 3], 3),
+  "P-Value" = format.pval(coefficients[, 4], digits = 3)
+)
+
+# Ajout des statistiques globales
+results_table <- rbind(
+  results_table,
+  c("R² ajusté", round(adj_r_squared, 3), "-", "-", "-"),
+  c("R²", round(r_squared, 3), "-", "-", "-"),
+  c("F-statistique", round(f_statistic, 3), "-", "-", format.pval(p_value, digits = 3))
+)
+
+# Génération du tableau esthétique
+results_table %>%
+  kable(
+    caption = "Résultats du Modèle de Régression Linéaire",
+    col.names = c("Variable", "Estimation", "Erreur Standard", "Valeur t", "P-Value"),
+    align = c("l", "c", "c", "c", "c"),
+    format = "html"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center",
+    font_size = 12
+  ) %>%
+  column_spec(1, bold = TRUE, color = "steelblue") %>%
+  column_spec(2:5, color = "black")
+```
+
+<div style="font-size:25px; color:steelblue;">
+Les résultats montrent une relation négative forte et significative entre les deux variables X et Y. L'intercept, estimé à 40.77, indique que lorsque X est nul, la valeur moyenne de Y est d'environ 40.77. La pente, estimée à -0.98, signifie qu'une augmentation d'une unité de X entraîne une diminution moyenne de 0.98 unités de Y. Ces deux coefficients sont statistiquement significatifs, comme le montrent leurs p-values très faibles. 
+</div>
+
+
+**4) Discussion des résultats**
+
+```{r}
+# Graphique à améliorer
+plot(reg$X, reg$Y,
+     main = "Relation entre les Pourcentages d'Actifs Cadres et les Votes pour Bardella",
+  xlab = "Pourcentage d'Actifs Cadres",
+  ylab = "Pourcentage de Votes pour Bardella",
+  col = "steelblue",
+  pch = 16, 
+  cex = 1.2 
+)
+
+# Ajout d'une tendance linéaire
+abline(lm(reg$Y ~ reg$X), col = "red", lwd = 2) 
+
+```
+
+
+<div style="font-size:25px; color:steelblue;">
+**Conclusion :** En résumé, cette analyse met en évidence une dynamique claire et significative entre les variables étudiées : une présence plus élevée d'actifs cadres est associée à un soutien plus faible pour Bardella dans les circonscriptions des Pays de la Loire. Cette relation pourrait être influencée par des facteurs sociologiques ou économiques qui mériteraient une exploration plus approfondie pour mieux comprendre les mécanismes en jeu. 
+
+Les tests de corrélation, Pearson et Spearman, confirment cette tendance : le coefficient de corrélation de Pearson est de -0.874, et celui de Spearman est de -0.782. Ces valeurs indiquent une corrélation forte et négative entre les deux variables. La faible valeur p associée à ces tests (bien en dessous de 0.05) renforce la signification statistique de cette relation, ce qui suggère que la corrélation n'est probablement pas le résultat du hasard, mais plutôt le reflet d'une véritable tendance dans les données.
+
+L'analyse de la régression linéaire offre une perspective plus approfondie : l'intercept de 40.77 indique que, dans une région où la proportion d'actifs cadres est nulle, le pourcentage de votes pour Bardella est de 40.77 %. La pente de -0.98 montre que pour chaque augmentation d'une unité du pourcentage d'actifs cadres, le pourcentage de votes pour Bardella diminue en moyenne de 0.98 %. Les deux coefficients (intercept et pente) ont des p-values très faibles, confirmant leur signification statistique.
+</div>
+
+<div style="font-size:30px; color:red;">
+L'hypothèse 2 est donc validée et vérifiée pour la catégorie socioprofessionnelle des cadres. 
+</div>
+
+---
+
+<div style="text-align: center; padding-top: 20px; font-size: 36px;background-color: #000080; color: white; padding: 20px;"> <strong> D.Analyse de la relation entre le niveau de diplôme des actifs et les votes pour Bardella  </strong> </div>
+
+
+**1) Représentation de X et Y **
+
+```{r}
+# Choix de Y quanti à expliquer
+base$Y <- base$Bardella
+nomY <- "% de vote Bardella"
+
+# Choix de Q : qualitative
+base$Q <-base$urb3
+nomQ <- "Typologie urbain-rural"
+
+# Choix de X : quantitative
+base$X <-base$dip_supbac
+nomX <- "% actifs ayant un diplôme supérieur au Bac"
+
+# Choix de la variable de poids
+base$W <- base$INS
+nomW <- "Nombre d'électeurs inscrits"
+
+# Choix de la région
+myreg<- "PAYS DE LA LOIRE"
+nomreg<-"Pays de la Loire"
+
+# Tableau simplifié région
+reg2<- base[base$nom_reg == myreg,c("ID","nom_reg","nom_dpt","INS","EXP","Y","Q","X")]
+```
+
+<div style="font-size:25px; color:steelblue;">
+X représente le pourcentage d'actifs ayant un diplôme après le bas. 
+
+Y représente le pourcentage de vote obtenu par Bardella. 
+</div>
+
+```{r, results = "hide", echo = FALSE}
+ggplot(reg2, aes(x = X, y = Y)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Relation entre % d'actifs diplômés et votes pour Bardella",
+       x = "% d'actifs avec diplôme supérieur au Bac",
+       y = "Votes pour Bardella") +
+  theme_minimal()
+```
+
+<div style="font-size:25px; color:steelblue;">
+Ce nuage de points montre une relation négative entre le pourcentage d'actifs ayant un diplôme supérieur au Bac et les votes pour Bardella. Cela signifie que dans les zones où le pourcentage de diplômés est plus élevé, les votes pour Bardella tendent à être plus faibles. Si cette relation est statistiquement significative, on pourrait conclure que le niveau d’éducation est un facteur lié aux votes pour Bardella. Les points autour de la droite montrent une certaine dispersion, ce qui suggère que d'autres variables (non représentées ici) pourraient également influencer les votes.
+</div>
+
+
+```{r, warning=FALSE}
+
+pearson_result2 <- cor.test(reg2$Y, reg2$X, method = "pearson")
+spearman_result2 <- cor.test(reg2$Y, reg2$X, method = "spearman")
+
+pearson_df2 <- tidy(pearson_result2)
+spearman_df2 <- tidy(spearman_result2)
+
+kable(pearson_df2, caption = "Résultats de la corrélation de Pearson") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) %>%
+  column_spec(1, bold = TRUE)
+
+kable(spearman_df2, caption = "Résultats de la corrélation de Spearman") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) %>%
+  column_spec(1, bold = TRUE)
+
+```
+
+<div style="font-size:25px; color:steelblue;">
+- **Commentaire :** Il existe une relation linéaire fortement négative et significative entre le pourcentage d'actifs diplômés et les votes pour Bardella. Plus le pourcentage d'actifs ayant un diplôme supérieur au Bac est élevé dans une région, moins Bardella reçoit de votes.
+
+Cela peut suggérer que le niveau d’éducation joue un rôle important dans les comportements électoraux, mais d'autres facteurs pourraient également être explorés pour compléter cette analyse.
+
+Le coefficient de corrélation de Pearson est de -0.906, indiquant une relation fortement négative entre les deux variables. Cela signifie qu'à mesure que le pourcentage d'actifs diplômés augmente, le pourcentage de votes pour Bardella diminue.Le coefficient de Spearman (ρ) indique une relation négative très forte entre les deux variables. 
+
+Avec un p-value de 0 (pratiquement nul), la corrélation est hautement significative. Cela indique qu'il est extrêmement improbable que cette relation soit due au hasard.
+</div>
+
+---
+
+**2) Modélisation** 
+
+```{r, results = "hide", echo = FALSE}
+mod3<-lm(reg2$Y~reg2$X)
+summary(mod3)
+```
+
+
+
+
+
+
+```{r}
+# Extraction des résultats de la régression
+coefficients1 <- summary(mod3)$coefficients
+r_squared1 <- summary(mod3)$r.squared
+adj_r_squared1 <- summary(mod3)$adj.r.squared
+f_statistic1 <- summary(mod3)$fstatistic[1]
+p_value1 <- pf(f_statistic1, summary(mod3)$fstatistic[2], summary(mod3)$fstatistic[3], lower.tail = FALSE)
+
+# Mise en forme des résultats dans un tableau
+results_table1 <- data.frame(
+  "Variable" = rownames(coefficients1),
+  "Estimation" = round(coefficients1[, 1], 3),
+  "Erreur Standard" = round(coefficients1[, 2], 3),
+  "Valeur t" = round(coefficients1[, 3], 3),
+  "P-Value" = format.pval(coefficients1[, 4], digits = 3)
+)
+
+results_table1 <- rbind(
+  results_table1,
+  c("R² ajusté", round(adj_r_squared1, 3), "-", "-", "-"),
+  c("R²", round(r_squared1, 3), "-", "-", "-"),
+  c("F-statistique", round(f_statistic1, 3), "-", "-", format.pval(p_value1, digits = 3))
+)
+
+# Génération du tableau 
+library(kableExtra)
+results_table1 %>%
+  kable(
+    caption = "Résultats du Modèle de Régression Linéaire",
+    col.names = c("Variable", "Estimation", "Erreur Standard", "Valeur t", "P-Value"),
+    align = c("l", "c", "c", "c", "c"),
+    format = "html"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center",
+    font_size = 12
+  ) %>%
+  column_spec(1, bold = TRUE, color = "steelblue") %>%
+  column_spec(2:5, color = "black")
+
+
+```
+
+<div style="font-size:25px; color:steelblue;">
+- **Commentaire :** Les résultats montrent une relation significative et négative entre les deux variables, avec un coefficient estimé pour X de -0,632 (p-value < 0,001). Cela indique qu'une augmentation d’un point de pourcentage dans la proportion d’actifs diplômés est associée à une diminution moyenne de 0,63% des votes pour le parti Bardella. L’intercept du modèle, estimé à 50,95, représente le pourcentage de votes attendu dans une population où aucun actif ne possède un diplôme supérieur au Bac. 
+
+Le modèle présente une qualité d’ajustement élevée, avec un coefficient de détermination (R²) de 82,08%, indiquant que la majorité de la variation des votes pour le parti est expliquée par la proportion d’actifs diplômés. 
+</div>
+
+<div style="font-size:30px; color:red;">
+L’hypothèse 3 selon laquelle une population plus diplômée tendrait à voter moins en faveur du parti Bardella est vérifiée et validée. 
+</div>
+
+---
+
+**CONCLUSION** 
+
+<div style="font-size:30px; color:steelblue;">
+Pour conclure, au sein d’une même région, les résultats électoraux peuvent varier considérablement. Dans les Pays de la Loire, par exemple, certaines circonscriptions affichent un pourcentage élevé de votes en faveur de Bardella, tandis que d’autres enregistrent des résultats bien plus faibles. Le candidat semble obtenir de meilleurs scores dans les zones rurales par rapport aux zones urbaines. Par ailleurs, une proportion plus élevée d’actifs cadres est associée à un soutien moindre pour Bardella dans les circonscriptions de cette région. Enfin, les populations plus diplômées ont tendance à voter moins en faveur de ce parti.
+</div>
+
+**Recommendation** 
+
+<div style="font-size:30px; color:darkblue;">
+- **Adopter une stratégie pour les zones urbaines**
+
+- **Répondre aux attentes des actifs cadres**
+
+- **Revoir le discours pour les populations diplômées**
+
+- **Miser sur une communication différenciée**
+
+- **Renforcer la proximité avec les électeurs**
+</div>
+
+
+
+
+
+
+
